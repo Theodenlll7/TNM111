@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scatter Plot</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        canvas {
+            margin-top: 20px;
+        }
+
+        button {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="showData('data1')">Show Data 1</button>
+    <button onclick="showData('data2')">Show Data 2</button>
+    <canvas id="scatterPlot" width="800" height="600"></canvas>
+
+    <script>
+        function readData(data){
+            d3.read(data).then(function (fileData){
+                let finalArray = [];
+            let parsedData = d3.csvParseRows(fileData, function (d) {
+                return {
+                    x: +d[0],
+                    y: +d[1],
+                    category: d[2]
+                };
+            });
+            parsedData.forEach(function (d) {
+                finalArray.push(d);
+            });
+            console.log(finalArray);
+            let data = finalArray;
+            })}
+
+
+        function showData(dataType) {
+            const canvas = document.getElementById('scatterPlot');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (dataType === 'data1') {
+                fetch('data1.csv')
+    
+                    .catch(error => console.error('Error fetching data1.csv:', error));
+            } else if (dataType === 'data2') {
+                fetch('data2.csv')
+
+                    .catch(error => console.error('Error fetching data2.csv:', error));
+            }
+        }
+
+        var canvas = document.getElementById("scatter-plot");
+            var ctx = canvas.getContext("2d");
+            // set canvas size to window size
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            // Set up plot variables
+            var xMin = 0;
+            var xMax = 0;
+            var yMin = 0;
+            var yMax = 0;
+            var screenOrigin = { x: 0, y: 0 };
+            var coordinateOrigin = { x: 0, y: 0 };
+            var scale = { x: 1.0, y: 1.0 };
+            var clickedOrigin = { x: 0.0, y: 0.0 };
+            var highlight = [];
+            var originPoint = [];
+
+            for (var i = 0; i < data.length; i++) {
+                if (data[i].x < xMin) {
+                    xMin = data[i].x;
+                }
+                if (data[i].x > xMax) {
+                    xMax = data[i].x;
+                }
+                if (data[i].y < yMin) {
+                    yMin = data[i].y;
+                }
+                if (data[i].y > yMax) {
+                    yMax = data[i].y;
+                }
+            }
+
+                // Check if click is on a data point
+                for (var i = 0; i < data.length; i++) {
+                    if (Math.abs((data[i].x - xMin) * scale.x + screenOrigin.x - x) < 5 && Math.abs((data[i].y - yMin) * scale.y + screenOrigin.y - y) < 5) {
+                        if (e.button === 0) {
+                            // Left click: set clicked point to top left corner
+                            var xClicked = (data[i].x - xMin) * scale.x + screenOrigin.x;
+                            var yClicked = (data[i].y - yMin) * scale.y + screenOrigin.y;
+                            //screenOrigin.x = screenOrigin.x - xClicked + 5;
+                            //screenOrigin.y = screenOrigin.y - yClicked + 5;
+
+                            highlight = [];
+                            highlight.push(data[i]);
+                            clickedOrigin.x = xClicked;
+                            clickedOrigin.y = yClicked;
+                            coordinateOrigin.x = data[i].x;
+                            coordinateOrigin.y = data[i].y;
+
+                            draw();
+                        } else if (e.button === 2) {
+                            if (highlight.length > 0) {
+                                highlight = [];
+                                draw();
+                                return;
+                            }
+                            // Right click: highlight closest 5 points
+                            highlight = [];
+                            for (var j = 0; j < 5; j++) {
+                                highlight.push(data[j]);
+                            }
+                            for (var j = 0; j < data.length; j++) {
+                                if (j !== i) {
+                                    var dist = Math.sqrt(Math.pow(data[i].x - data[j].x, 2) + Math.pow(data[i].y - data[j].y, 2));
+                                    for (var k = 0; k < highlight.length; k++) {
+                                        if (dist < Math.sqrt(Math.pow(data[i].x - highlight[k].x, 2) + Math.pow(data[i].y - highlight[k].y, 2))) {
+                                            highlight.splice(k, 0, data[j]);
+                                            highlight.pop();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            draw();
+                        }
+                        break;
+                    }
+                }
+        // Show data1 by default
+        showData('data1');
+    </script>
+</body>
+</html>

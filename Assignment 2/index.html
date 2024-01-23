@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Include d3js -->
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <!-- Include fs from node.js -->
+    <script src="https://unpkg.com/browserfs/dist/browserfs.min.js"></script>
+    <title>Scatter Plot</title>
+    <style>
+        canvas {
+            display: block;
+        }
+
+        #tooltip {
+            position: absolute;
+            display: none;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            padding: 10px;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="scatter-plot"></canvas>
+    <canvas id="legend"></canvas>
+    <div id="tooltip"></div>
+    <script>
+        document.oncontextmenu = function () {
+            return false;
+        }
+
+        // Utility function to find the range of data
+        function findDataRange(data) {
+            let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+            for (let i = 0; i < data.length; i++) {
+                xMin = Math.min(xMin, data[i].x);
+                xMax = Math.max(xMax, data[i].x);
+                yMin = Math.min(yMin, data[i].y);
+                yMax = Math.max(yMax, data[i].y);
+            }
+            return { xMin, xMax, yMin, yMax };
+        }
+
+        // Set up canvas and context
+        var canvas = document.getElementById("scatter-plot");
+        var ctx = canvas.getContext("2d");
+        var legendCanvas = document.getElementById("legend");
+        var legendCtx = legendCanvas.getContext("2d");
+        var tooltip = document.getElementById("tooltip");
+
+        // Fetch data from CSV file
+        d3.text("data2.csv").then(function (fileData) {
+
+            let data = d3.csvParseRows(fileData, d => ({ x: +d[0], y: +d[1], category: d[2] }));
+
+            // Set canvas size
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            // Find data range
+            let { xMin, xMax, yMin, yMax } = findDataRange(data);
+
+            // Set up scaling
+            let scale = { x: canvas.width / (xMax - xMin), y: canvas.height / (yMax - yMin) };
+
+            // Set up legend
+            let legendLabels = ["foo", "bar", "baz"];
+            if (data.length > 0 && ["foo", "bar", "baz"].includes(data[0].category)) {
+                legendLabels = ["a", "b", "c"];
+            }
+
+            // Set up existing variables
+            var screenOrigin = { x: 0, y: 0 };
+            var coordinateOrigin = { x: 0, y: 0 };
+            var clickedOrigin = { x: 0.0, y: 0.0 };
+            var highlight = [];
+
+            // Event listener for mouse click
+            canvas.addEventListener("mousedown", function (e) {
+                var rect = canvas.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+
+                // Check if click is on a data point
+                for (var i = 0; i < data.length; i++) {
+                    if (Math.abs((data[i].x - xMin) * scale.x + screenOrigin.x - x) < 5 && Math.abs((data[i].y - yMin) * scale.y + screenOrigin.y - y) < 5) {
+                        if (e.button === 0) {
+                            // Left click: set clicked point to top left corner
+                            var xClicked = (data[i].x - xMin) * scale.x + screenOrigin.x;
+                            var yClicked = (data[i].y - yMin) * scale.y + screenOrigin.y;
+
+                            highlight = [];
+                            highlight.push(data[i]);
+                            clickedOrigin.x = xClicked;
+                            clickedOrigin.y = yClicked;
+                            coordinateOrigin.x = data[i].x;
+                            coordinateOrigin.y = data[i].y;
+
+                            draw();
+                            showTooltip(data[i]);
+                        } else if (e.button === 2) {
+                            if (highlight.length > 0) {
+                                highlight = [];
+                                draw();
+                                hideTooltip();
+                                return;
+                            }
+                            // Right click: highlight closest 5 points
+                            highlight = [];
+                            for (var j = 0; j < 5; j++) {
+                                highlight.push(data[j]);
+                            }
+                            for (var j = 0; j < data.length; j++) {
+                                if (j !== i) {
+                                    var dist = Math.sqrt(Math.pow(data[i].x - data[j].x, 2) + Math.pow(data[i].y - data[j].y, 2));
+                                    for (var k = 0; k < highlight.length; k++) {
+                                        if (dist < Math.sqrt(Math.pow(data[i].x - highlight[k].x, 2) + Math.pow(data[i].y - highlight[k].y, 2))) {
+                                            highlight.splice(k, 0, data[j]);
+                                            highlight.pop();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            draw();
+                            hideTooltip();
+                        }
+                        break;
+                    }
+                }
+            });
+
+            // Draw scatter plot
+            function draw() {
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw axes and ticks
+                for (var i = Math.ceil(xMin); i <= xMax; i += 10) {
+                    ctx.beginPath();
+                    ctx.moveTo((i - xMin) * scale.x + screenOrigin.x, screenOrigin.y - 5);
+                    ctx.lineTo((i - xMin) * scale.x + screenOrigin.x, screenOrigin.y + 5);
+                    ctx.stroke();
+                    ctx.fillStyle = "black";
+                    ctx.fillText(i, (i - xMin) * scale.x + screenOrigin.x, screenOrigin.y + 20);
+                }
+                for (var i = Math.ceil(yMin); i <= yMax; i += 10) {
+                    ctx.beginPath();
+                    ctx.moveTo(screenOrigin.x - 5, (i - yMin) * scale.y + screenOrigin.y);
+                    ctx.lineTo(screenOrigin.x + 5, (i - yMin) * scale.y + screenOrigin.y);
+                    ctx.stroke();
+                    ctx.fillStyle = "black";
+                    ctx.fillText(i, screenOrigin.x + 10, (i - yMin) * scale.y + screenOrigin.y);
+                }
+
+                // Draw data points
+                for (var i = 0; i < data.length; i++) {
+                    if (highlight.indexOf(data[i]) === -1) {
+                        if (data[i].x >= coordinateOrigin.x && data[i].y >= coordinateOrigin.y) {
+                            ctx.fillStyle = "green";
+                        } else if (data[i].x < coordinateOrigin.x && data[i].y >= coordinateOrigin.y) {
+                            ctx.fillStyle = "blue";
+                        } else if (data[i].x < coordinateOrigin.x && data[i].y < coordinateOrigin.y) {
+                            ctx.fillStyle = "purple";
+                        } else {
+                            ctx.fillStyle = "orange";
+                        }
+                    } else {
+                        ctx.fillStyle = "red";
+                    }
+                    if (data[i].category === "b" || data[i].category === "bar") {
+                        ctx.beginPath();
+                        ctx.arc((data[i].x - xMin) * scale.x + screenOrigin.x, (data[i].y - yMin) * scale.y + screenOrigin.y, 5, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                    else if (data[i].category === "a" || data[i].category === "foo") {
+                        ctx.fillRect((data[i].x - xMin) * scale.x + screenOrigin.x - 5, (data[i].y - yMin) * scale.y + screenOrigin.y - 5, 10, 10);
+                    }
+                    else if (data[i].category === "c" || data[i].category === "baz") {
+                        ctx.beginPath();
+                        ctx.moveTo((data[i].x - xMin) * scale.x + screenOrigin.x, (data[i].y - yMin) * scale.y + screenOrigin.y - 5);
+                        ctx.lineTo((data[i].x - xMin) * scale.x + screenOrigin.x + 5, (data[i].y - yMin) * scale.y + screenOrigin.y + 5);
+                        ctx.lineTo((data[i].x - xMin) * scale.x + screenOrigin.x - 5, (data[i].y - yMin) * scale.y + screenOrigin.y + 5);
+                        ctx.fill();
+                    }
+                }
+            }
+            draw(); // Initial draw
+
+            // Draw legend
+            legendCanvas.width = 350;
+            legendCanvas.height = 200;
+            legendCtx.fillStyle = "#000000";
+
+            // Draw legend items
+            for (let i = 0; i < legendLabels.length; i++) {
+                // ... (Your existing legend drawing logic)
+            }
+
+            // Show tooltip
+            function showTooltip(dataPoint) {
+                tooltip.innerHTML = `X: ${dataPoint.x.toFixed(2)}, Y: ${dataPoint.y.toFixed(2)}`;
+                tooltip.style.left = (clickedOrigin.x + 10) + 'px';
+                tooltip.style.top = (clickedOrigin.y - 10) + 'px';
+                tooltip.style.display = 'block';
+            }
+
+            // Hide tooltip
+            function hideTooltip() {
+                tooltip.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>
